@@ -1,34 +1,49 @@
-// async function getUserByDiscordID(discordId: number) {
-//   const notionData = await notion.databases.query({
-//     database_id: NOTION_USERS_DATABASE_ID,
-//     filter: { property: "Discord User", people: { contains: discordId } }
-//   });
+const NOTION_XP_DATABASE_ID = process.env.NOTION_XP_DATABASE_ID;
+const NOTION_DAILY_QUESTS_DATABASE_ID =
+  process.env.NOTION_DAILY_QUESTS_DATABASE_ID;
+const NOTION_GOALS_DATABASE_ID = process.env.NOTION_GOALS_DATABASE_ID;
+const NOTION_USERS_DATABASE_ID = process.env.NOTION_USERS_DATABASE_ID;
 
-//   if (notionData.results.length === 0) {
-//     return null;
-//   }
+import { Client as NotionClient } from "@notionhq/client";
+const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
 
-//   const user = notionData.results[0];
-//   return {
-//     id: user.id,
-//     name: user.properties.Name.title[0]?.plain_text,
-//     discordId: discordId
-//   };
-// }
+export async function getUserByDiscordID(discordId: string) {
+  const notionData: any = await notion.databases.query({
+    database_id: NOTION_USERS_DATABASE_ID,
+    filter: { property: "Discord ID", rich_text: { contains: discordId } },
+  });
 
-// async function getOtherUser(discordId: number) {
-//   const user = await getUserByDiscordID(discordId);
-//   if (!user) return null;
+  if (notionData.results.length === 0) {
+    return null;
+  }
 
-//   const notionData = await notion.pages.retrieve({ page_id: user.id });
-//   const partnerRelation = notionData.properties["Accountability Partner"].relation;
+  const user = notionData.results[0];
 
-//   if (partnerRelation.length > 0) {
-//     const partnerPage = await notion.pages.retrieve({ page_id: partnerRelation[0].id });
-//     return {
-//       discordId: partnerPage.properties["Discord User"].people[0]?.id,
-//       name: partnerPage.properties.Name.title[0]?.plain_text
-//     };
-//   }
-//   return null;
-// }
+  return {
+    id: user.id,
+    name: user.properties.Person.people[0].name,
+    discordId: discordId,
+  };
+}
+
+export async function getOtherUser(discordId: string) {
+  const user = await getUserByDiscordID(discordId);
+  if (!user) return null;
+
+  const notionData: any = await notion.pages.retrieve({ page_id: user.id });
+  const partnerRelation =
+    notionData.properties["Accountability Partner"].relation;
+  if (partnerRelation.length > 0) {
+    const partnerPage: any = await notion.pages.retrieve({
+      page_id: partnerRelation[0].id,
+    });
+    console.log(partnerPage);
+    return {
+      discordId: partnerPage.properties["Discord User"].people[0]?.id,
+      name: partnerPage.properties.Person.name,
+    };
+  }
+  return null;
+}
+
+export { notion };

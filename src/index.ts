@@ -3,6 +3,7 @@ import { Client, GatewayIntentBits, Events, Message } from "discord.js";
 import { Client as NotionClient } from "@notionhq/client";
 import OpenAI from "openai";
 import cron from "node-cron";
+import { progressResponse } from "./modules/xp";
 // import { storeChatMemory, retrieveChatMemory } from "./modules/relevance";
 require("source-map-support").install();
 
@@ -24,6 +25,7 @@ const discordClient = new Client({
 });
 const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
 const notion = new NotionClient({ auth: process.env.NOTION_API_KEY });
+const validCommands = ["!progress"];
 
 discordClient.once(Events.ClientReady, (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
@@ -33,7 +35,6 @@ async function generateChatResponse(userId, message) {
   // const memory = await retrieveChatMemory(userId);
 
   const prompt = `
-
         User's message: "${message}"
         Generate a response that feels natural, remembers past conversations, and stays engaging  and true to your personality as Lyric.AI.
     `;
@@ -61,18 +62,34 @@ async function generateChatResponse(userId, message) {
   return data.choices[0].message.content.trim();
 }
 
-discordClient.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-  const parsedMessage = message.content.toLowerCase();
-  if (!parsedMessage.includes("lyric")) return;
-
+const lyricResponse = async (message) => {
   const userMessage = message.content.replace("lyric", "").trim();
   if (!userMessage) return message.reply("Hey! What’s up? 😊");
 
   const aiResponse = await generateChatResponse(message.author.id, userMessage);
-  // await storeChatMemory(message.author.id, userMessage, aiResponse);
-
   message.reply(aiResponse);
+};
+
+discordClient.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+
+  const lowerCaseMessage = message.content.toLowerCase();
+  const lyricName = "lyric";
+  const validCommands = ["!progress", "!xp", "!quest"];
+
+  if (validCommands.some((cmd) => lowerCaseMessage.startsWith(cmd))) {
+    let userMessage = message.content.trim();
+
+    if (userMessage.startsWith("!progress")) {
+      progressResponse(message);
+    }
+  } else if (lowerCaseMessage.includes(lyricName)) {
+    lyricResponse(message);
+  }
+
+  // await storeChatMemory(message.author.id, userMessage, aiResponse);
 });
 
 discordClient.login(process.env.DISCORD_BOT_TOKEN);
+
+export default discordClient;

@@ -1,67 +1,114 @@
-// async function addXP(discordId: number, xpAmount: number, message: Message) {
-//   const user = await getUserByDiscordID(discordId);
-//   if (!user) return message.reply("❌ User not found in Notion database.");
+import { Message } from "discord.js";
+import { getUserByDiscordID, notion } from "./notion";
+import discordClient from "../index";
 
-//   const notionData = await notion.databases.query({ database_id: NOTION_XP_DATABASE_ID });
-//   let pageId = null, currentXP = 0, currentRank = "E-Rank", nextRankXP = 500;
+const NOTION_XP_DATABASE_ID = process.env.NOTION_XP_DATABASE_ID;
+const NOTION_DAILY_QUESTS_DATABASE_ID =
+  process.env.NOTION_DAILY_QUESTS_DATABASE_ID;
+const NOTION_GOALS_DATABASE_ID = process.env.NOTION_GOALS_DATABASE_ID;
+const NOTION_USERS_DATABASE_ID = process.env.NOTION_USERS_DATABASE_ID;
 
-//   notionData.results.forEach(entry => {
-//     if (entry.properties.Name.title[0]?.plain_text === user.name) {
-//       pageId = entry.id;
-//       currentXP = entry.properties["Current XP"].number || 0;
-//       currentRank = entry.properties["Rank"].select.name;
-//       nextRankXP = entry.properties["Next Rank XP"].number;
-//     }
-//   });
+async function addXP(discordId: string, xpAmount: number, message: Message) {
+  const user = await getUserByDiscordID(discordId);
+  if (!user) return message.reply("❌ User not found in Notion database.");
 
-//   let newXP = currentXP + xpAmount;
-//   let rankUpMessage = "";
+  const notionData: any = await notion.databases.query({
+    database_id: NOTION_XP_DATABASE_ID,
+  });
+  let pageId = null,
+    currentXP = 0,
+    currentRank = "E-Rank",
+    nextRankXP = 500;
 
-//   const ranks = [
-//     { name: "E-Rank", xp: 0 },
-//     { name: "D-Rank", xp: 500 },
-//     { name: "C-Rank", xp: 1200 },
-//     { name: "B-Rank", xp: 3000 },
-//     { name: "A-Rank", xp: 6500 },
-//     { name: "S-Rank", xp: 12000 }
-//   ];
+  notionData.results.forEach((entry) => {
+    if (entry.properties.Name.title[0]?.plain_text === user.name) {
+      pageId = entry.id;
+      currentXP = entry.properties["Current XP"].number || 0;
+      currentRank = entry.properties["Rank"].select.name;
+      nextRankXP = entry.properties["Next Rank XP"].number;
+    }
+  });
 
-//   for (let i = 0; i < ranks.length; i++) {
-//     if (newXP >= ranks[i].xp && currentRank !== ranks[i].name) {
-//       currentRank = ranks[i].name;
-//       nextRankXP = ranks[i + 1] ? ranks[i + 1].xp : null;
-//       rankUpMessage = `🔥 **Rank Up!** 🔥\n🎖️ You are now **${currentRank}**!\nNew XP Goal: **${nextRankXP} XP**.`;
-//     }
-//   }
+  let newXP = currentXP + xpAmount;
+  let rankUpMessage = "";
 
-//   if (pageId) {
-//     await notion.pages.update({
-//       page_id: pageId,
-//       properties: {
-//         "Current XP": { number: newXP },
-//         "Rank": { select: { name: currentRank } },
-//         "Next Rank XP": { number: nextRankXP }
-//       }
-//     });
-//   }
+  const ranks = [
+    { name: "E-Rank", xp: 0 },
+    { name: "D-Rank", xp: 500 },
+    { name: "C-Rank", xp: 1200 },
+    { name: "B-Rank", xp: 3000 },
+    { name: "A-Rank", xp: 6500 },
+    { name: "S-Rank", xp: 12000 },
+  ];
 
-//   let xpMessage = `✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:** ${newXP} XP / ${nextRankXP} XP`;
-//   if (rankUpMessage) xpMessage += `\n\n${rankUpMessage}`;
+  for (let i = 0; i < ranks.length; i++) {
+    if (newXP >= ranks[i].xp && currentRank !== ranks[i].name) {
+      currentRank = ranks[i].name;
+      nextRankXP = ranks[i + 1] ? ranks[i + 1].xp : null;
+      rankUpMessage = `🔥 **Rank Up!** 🔥\n🎖️ You are now **${currentRank}**!\nNew XP Goal: **${nextRankXP} XP**.`;
+    }
+  }
 
-//   message.reply(xpMessage);
-// }
+  if (pageId) {
+    await notion.pages.update({
+      page_id: pageId,
+      properties: {
+        "Current XP": { number: newXP },
+        Rank: { select: { name: currentRank } },
+        "Next Rank XP": { number: nextRankXP },
+      },
+    });
+  }
 
-// Command to check XP progress
-// discordClient.on('messageCreate', async message => {
-//   if (message.content.startsWith("!progress")) {
-//     const user = await getUserByDiscordID(message.author.id);
-//     if (!user) return message.reply("❌ No XP data found. Complete a quest to start tracking!");
+  let xpMessage = `✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:** ${newXP} XP / ${nextRankXP} XP`;
+  if (rankUpMessage) xpMessage += `\n\n${rankUpMessage}`;
 
-//     const notionData = await notion.pages.retrieve({ page_id: user.id });
-//     let currentXP = notionData.properties["Current XP"].number;
-//     let nextRankXP = notionData.properties["Next Rank XP"].number;
-//     let rank = notionData.properties["Rank"].select.name;
+  message.reply(xpMessage);
+}
 
-//     message.reply(`✨ **Your Progress:**\n🏆 Rank: **${rank}**\n🔢 XP: **${currentXP} / ${nextRankXP}**\n🔥 Keep going!`);
-//   }
-// });
+export async function progressResponse(message) {
+  if (message.content.startsWith("!progress")) {
+    const user = await getUserByDiscordID(message.author.id);
+
+    if (!user) {
+      return message.reply(
+        "❌ No XP data found. Please ensure you're registered in Notion."
+      );
+    }
+
+    const userNotionPageId = user.id;
+
+    const notionXPData = await notion.databases.query({
+      database_id: process.env.NOTION_XP_DATABASE_ID,
+      filter: {
+        property: "Related User",
+        relation: { contains: userNotionPageId },
+      },
+    });
+
+    let xpEntry;
+    if (notionXPData.results.length > 0) {
+      xpEntry = notionXPData.results[0];
+    } else {
+      xpEntry = await notion.pages.create({
+        parent: { database_id: process.env.NOTION_XP_DATABASE_ID },
+        properties: {
+          Name: { title: [{ text: { content: user.name } }] },
+          "Current XP": { number: 0 },
+          "Next Rank XP": { number: 500 },
+          Rank: { select: { name: "E-Rank" } },
+          "Total Quests Completed": { number: 0 },
+          "Related User": { relation: [{ id: userNotionPageId }] },
+        },
+      });
+    }
+
+    let currentXP = xpEntry.properties["Current XP"].number || 0;
+    let nextRankXP = xpEntry.properties["Next Rank XP"].number || 500;
+    let rank = xpEntry.properties["Rank"].select?.name || "Unranked";
+
+    message.reply(
+      `✨ **Your Progress:**\n🏆 Rank: **${rank}**\n🔢 XP: **${currentXP} / ${nextRankXP}**\n🔥 Keep going!`
+    );
+  }
+}
