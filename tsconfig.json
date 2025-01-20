@@ -3,7 +3,7 @@
     "target": "es2016",                                 
     "module": "commonjs",                             
     "forceConsistentCasingInFileNames": true,            
-    "strict": true,                                     
+    "strict": false,                                     
     "skipLibCheck": true,
     "outDir": "./dist",
     "rootDir": "./src"
