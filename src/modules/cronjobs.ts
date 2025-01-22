@@ -1,4 +1,6 @@
-// // Weekly XP Report
+import cron from "node-cron";
+
+// Weekly XP Report
 // cron.schedule('0 18 * * 7', async () => {
 //   const notionData = await notion.databases.query({ database_id: NOTION_XP_DATABASE_ID });
 //   let report = "**📊 Weekly XP Report:**\n";
@@ -12,4 +14,3 @@
 
 //   const channel = discordClient.channels.cache.get(DISCORD_CHANNEL_ID);
 //   if (channel) channel.send(report);
-// }, { timezone: "America/New_York" });

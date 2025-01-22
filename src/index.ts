@@ -4,6 +4,8 @@ import { Client as NotionClient } from "@notionhq/client";
 import OpenAI from "openai";
 import cron from "node-cron";
 import { progressResponse } from "./modules/xp";
+import { generateDailyQuests, generateIndividualQuest } from "./modules/quests";
+import { generateChatResponse } from "./modules/aiResponses";
 // import { storeChatMemory, retrieveChatMemory } from "./modules/relevance";
 require("source-map-support").install();
 
@@ -29,38 +31,8 @@ const validCommands = ["!progress"];
 
 discordClient.once(Events.ClientReady, (readyClient) => {
   console.log(`Ready! Logged in as ${readyClient.user.tag}`);
+  // generateDailyQuests(notion);
 });
-
-async function generateChatResponse(userId, message) {
-  // const memory = await retrieveChatMemory(userId);
-
-  const prompt = `
-        User's message: "${message}"
-        Generate a response that feels natural, remembers past conversations, and stays engaging  and true to your personality as Lyric.AI.
-    `;
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are Lyric, an AI assistant who is friendly, engaging, and supportive. You use emojis frequently.",
-        },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-
-  const data = await response.json();
-  return data.choices[0].message.content.trim();
-}
 
 const lyricResponse = async (message) => {
   const userMessage = message.content.replace("lyric", "").trim();
@@ -75,13 +47,16 @@ discordClient.on("messageCreate", async (message) => {
 
   const lowerCaseMessage = message.content.toLowerCase();
   const lyricName = "lyric";
-  const validCommands = ["!progress", "!xp", "!quest"];
+  const validCommands = ["!progress", "!xp", "!givequest"];
 
   if (validCommands.some((cmd) => lowerCaseMessage.startsWith(cmd))) {
     let userMessage = message.content.trim();
 
     if (userMessage.startsWith("!progress")) {
       progressResponse(message);
+    }
+    if (userMessage.startsWith("!givequest")) {
+      generateIndividualQuest(notion, message);
     }
   } else if (lowerCaseMessage.includes(lyricName)) {
     lyricResponse(message);
