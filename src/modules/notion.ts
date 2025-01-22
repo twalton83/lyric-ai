@@ -37,7 +37,7 @@ export async function getOtherUser(discordId: string) {
     const partnerPage: any = await notion.pages.retrieve({
       page_id: partnerRelation[0].id,
     });
-    console.log(partnerPage);
+
     return {
       discordId: partnerPage.properties["Discord User"].people[0]?.id,
       name: partnerPage.properties.Person.name,
@@ -45,5 +45,23 @@ export async function getOtherUser(discordId: string) {
   }
   return null;
 }
+
+export const createQuestPage = async (quest, goal, userId) => {
+  const { title, description, xp, dueDate, status } = quest;
+
+  return await notion.pages.create({
+    parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
+    properties: {
+      Name: { title: [{ text: { content: description } }] },
+      "Generated From Goal": { relation: [{ id: goal.id }] },
+      "Assigned To": { relation: [{ id: userId }] },
+      "Completion Status": { checkbox: status },
+      "XP Reward": { number: xp }, // Default XP for completing
+      "Due Date": {
+        date: { start: new Date().toISOString().split("T")[0] },
+      },
+    },
+  });
+};
 
 export { notion };

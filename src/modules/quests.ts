@@ -1,5 +1,5 @@
-import { getUserByDiscordID } from "./notion";
-import { generateAIQuest } from "./aiResponses";
+import { getUserByDiscordID } from "./notion.ts";
+import { generateAIQuest } from "./aiResponses.ts";
 import { Message, User, EmbedBuilder } from "discord.js";
 
 export async function generateDailyQuests(notion, agent) {
@@ -12,10 +12,9 @@ export async function generateDailyQuests(notion, agent) {
     const userId = goal.properties["Assigned To"].relation[0]?.id;
     if (!userId) continue;
 
-    // Generate quest text
     const questDescription = `Progress on: ${goal.properties.Name.title[0].plain_text}`;
 
-    // Create new quest in Notion
+    // TODO: create a helper
     await notion.pages.create({
       parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
       properties: {

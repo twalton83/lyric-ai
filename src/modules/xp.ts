@@ -1,6 +1,5 @@
 import { Message } from "discord.js";
-import { getUserByDiscordID, notion } from "./notion";
-import discordClient from "../index";
+import { getUserByDiscordID, notion } from "./notion.ts";
 
 const NOTION_XP_DATABASE_ID = process.env.NOTION_XP_DATABASE_ID;
 const NOTION_DAILY_QUESTS_DATABASE_ID =
