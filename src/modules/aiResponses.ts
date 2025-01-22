@@ -1,12 +1,17 @@
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-export async function generateChatResponse(userId, message) {
-  // const memory = await retrieveChatMemory(userId);
+export async function generateChatResponse(userId, message, memories) {
+  let memoryContext =
+    memories.length > 0
+      ? memories
+          .map(
+            (m, index) =>
+              `Memory ${index + 1}:\nUser: ${m.message}\nLyric: ${m.response}`
+          )
+          .join("\n\n")
+      : "No relevant past conversations.";
 
-  const prompt = `
-        User's message: "${message}"
-        Generate a response that feels natural, remembers past conversations, and stays engaging  and true to your personality as Lyric.AI.
-    `;
+  console.log(`Context:\n${memoryContext}\n\nUser: ${message}`);
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -19,10 +24,18 @@ export async function generateChatResponse(userId, message) {
       messages: [
         {
           role: "system",
-          content:
-            "You are Lyric, an AI assistant who is friendly, engaging, and supportive. You use emojis frequently.",
+          content: `You are Lyric, an AI assistant who is friendly, engaging, and supportive. You use emojis frequently.
+
+            Below is relevant context from past conversations.
+            If relevant, use this information to guide your response.
+
+            ${memoryContext}
+          `,
         },
-        { role: "user", content: prompt },
+        {
+          role: "user",
+          content: message,
+        },
       ],
     }),
   });

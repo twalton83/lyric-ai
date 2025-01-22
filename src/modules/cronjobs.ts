@@ -1,4 +1,5 @@
 import cron from "node-cron";
+// Need cron job that runs at 5am PST to distribute quests
 
 // Weekly XP Report
 // cron.schedule('0 18 * * 7', async () => {
