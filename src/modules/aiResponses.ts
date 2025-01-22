@@ -34,7 +34,7 @@ export async function generateChatResponse(userId, message) {
 export async function generateAIQuest(goalText) {
   const prompt = `
         User's message: "${goalText}"
-        Generate a quest-like task for this person to do that is related to their goal. If related to fitness, assume the user is fit and has access to a gym.  Generate a response that feels natural, remembers past conversations, and stays engaging  and true to your personality as Lyric.AI.
+        Generate a quest-like task for this person to do that is related to their goal. If related to fitness, assume the user is fit and has access to a gym.  Generate a response that feels natural, remembers past conversations, and stays engaging  and true to your personality as Lyric.AI. Keep it succinct and general (ie, "go to the gym",  "read 10 pages of a book", "study for the exam for 30 minutes") The quest should ideally take no more than an hour and a half to complete..
     `;
 
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
