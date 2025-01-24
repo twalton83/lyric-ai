@@ -1,6 +1,15 @@
 import { getUserByDiscordID } from "./notion.ts";
 import { generateAIQuest } from "./aiResponses.ts";
-import { Message, User, EmbedBuilder } from "discord.js";
+import {
+  Message,
+  User,
+  EmbedBuilder,
+  ButtonBuilder,
+  ActionRowBuilder,
+  ButtonStyle,
+  Interaction,
+  ChatInputCommandInteraction,
+} from "discord.js";
 
 export async function generateDailyQuests(notion, agent) {
   const goalsData = await notion.databases.query({
@@ -29,40 +38,38 @@ export async function generateDailyQuests(notion, agent) {
   }
 }
 
-export async function generateIndividualQuest(notion: any, message: Message) {
-  const user = await getUserByDiscordID(message.author.id);
+export async function generateIndividualQuest(
+  notion: any,
+  interaction: ChatInputCommandInteraction
+) {
+  const user = await getUserByDiscordID(interaction.user.id);
   if (!user) return;
 
-  const userNotionPageId = user.id; // This is the user's Notion Page ID, not their Notion user ID
-
-  // Retrieve Notion User ID (who created the goal)
+  const userNotionPageId = user.id;
   const notionUserData = await notion.pages.retrieve({
     page_id: userNotionPageId,
   });
-
   if (!notionUserData) {
-    return message.reply("❌ Unable to retrieve Notion user information.");
+    return await interaction.reply(
+      "❌ Unable to retrieve Notion user information."
+    );
   }
-
-  const notionUserId = notionUserData.created_by.id; // This is the Notion internal user ID
-
+  const notionUserId = notionUserData.created_by.id;
   const goalsData: any = await notion.databases.query({
     database_id: process.env.NOTION_GOALS_DATABASE_ID,
     filter: { property: "Created By", created_by: { contains: notionUserId } },
   });
-
   if (goalsData.results.length === 0) {
-    return message.reply("❌ No goals found for you in Notion.");
+    return await interaction.reply("❌ No goals found for you in Notion.");
   }
+
+  await interaction.reply("Working on it");
 
   const randomGoal =
     goalsData.results[Math.floor(Math.random() * goalsData.results.length)];
-
   const userId = randomGoal.properties["Created By"].created_by.id;
   if (!userId) return;
-
   const questDescription = await generateAIQuest(randomGoal.title);
-
   const quest = {
     title: randomGoal.properties.title,
     description: questDescription,
@@ -70,7 +77,6 @@ export async function generateIndividualQuest(notion: any, message: Message) {
     status: false,
     dueDate: new Date().toISOString().split("T")[0],
   };
-
   const page = await notion.pages.create({
     parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
     properties: {
@@ -82,8 +88,21 @@ export async function generateIndividualQuest(notion: any, message: Message) {
       "Due Date": { date: { start: quest.dueDate } },
     },
   });
+  const confirm = new ButtonBuilder()
+    .setCustomId("reject")
+    .setLabel("Reject Quest")
+    .setStyle(ButtonStyle.Danger);
+  const cancel = new ButtonBuilder()
+    .setCustomId("accept")
+    .setLabel("Accept Quest")
+    .setStyle(ButtonStyle.Success);
+  const row: any = new ActionRowBuilder().addComponents(cancel, confirm);
 
-  message.reply({ embeds: [generateQuestEmbed(quest, page.url)] });
+  await interaction.followUp({
+    embeds: [generateQuestEmbed(quest, page.url)],
+    components: [row],
+  });
+  // if rejected, delete page
 }
 
 const generateQuestEmbed = (quest: any, url: string) => {
