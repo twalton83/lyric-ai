@@ -2,43 +2,13 @@ import { getUserByDiscordID } from "./notion.ts";
 import { generateAIQuest } from "./aiResponses.ts";
 import {
   Message,
-  User,
   EmbedBuilder,
   ButtonBuilder,
   ActionRowBuilder,
   ButtonStyle,
-  Interaction,
   ChatInputCommandInteraction,
-  InteractionCallbackResponse,
 } from "discord.js";
-import { equal } from "assert";
-
-export async function generateDailyQuests(notion, agent) {
-  const goalsData = await notion.databases.query({
-    database_id: process.env.NOTION_GOALS_DATABASE_ID,
-    filter: { property: "Status", select: { equals: "Active" } },
-  });
-
-  for (const goal of goalsData.results) {
-    const userId = goal.properties["Assigned To"].relation[0]?.id;
-    if (!userId) continue;
-
-    const questDescription = `Progress on: ${goal.properties.Name.title[0].plain_text}`;
-
-    // TODO: create a helper
-    await notion.pages.create({
-      parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
-      properties: {
-        Name: { title: [{ text: { content: questDescription } }] },
-        "Generated From Goal": { relation: [{ id: goal.id }] },
-        "Assigned To": { relation: [{ id: userId }] },
-        "Completion Status": { checkbox: false },
-        "XP Reward": { number: 50 }, // Default XP for completing
-        "Due Date": { date: { start: new Date().toISOString().split("T")[0] } },
-      },
-    });
-  }
-}
+import { Client } from "@notionhq/client";
 
 export async function generateIndividualQuest(
   notion: any,
@@ -170,11 +140,63 @@ export async function generateIndividualQuest(
   }
 }
 
+export async function getCurrentQuest(
+  notion: Client,
+  interaction: ChatInputCommandInteraction
+) {
+  const user = await getUserByDiscordID(interaction.user.id);
+  if (!user) return;
+
+  const userNotionPageId = user.id;
+
+  const notionUserData = await notion.pages.retrieve({
+    page_id: userNotionPageId,
+  });
+
+  if (!notionUserData) {
+    return await interaction.reply(
+      "❌ Unable to retrieve Notion user information."
+    );
+  }
+
+  const questData = await notion.databases.query({
+    database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID,
+    filter: {
+      and: [
+        { property: "Assigned To", relation: { contains: userNotionPageId } },
+        { property: "Completion Status", checkbox: { equals: false } },
+      ],
+    },
+  });
+
+  if (questData.results.length === 0) {
+    return await interaction.reply(
+      "You don't have a quest yet! Use /givequest to get one!"
+    );
+  } else {
+    // TODO: fix typing
+    const quest = <any>questData.results[0];
+
+    const parsedQuest = {
+      // TODO: Fix quest description in Notion for proper fetching and display
+      title: "Current Quest",
+      description: quest.properties["Title"].title[0],
+      xp: quest.properties["XP Value"].number,
+      status: quest.properties["Completion Status"].checkbox,
+      dueDate: quest.properties["Due Date"].date.start,
+    };
+
+    await interaction.reply({
+      embeds: [generateQuestEmbed(parsedQuest, quest.url)],
+    });
+  }
+}
+
 const generateQuestEmbed = (quest: any, url: string) => {
   const embed = new EmbedBuilder()
     .setColor(0x0099ff)
-    .setTitle("New Quest!")
-    .setDescription(quest.description)
+    .setTitle(quest.title)
+    .setDescription(quest.description.text.content)
     .setURL(url)
     .addFields(
       { name: "Due Date", value: String(quest.dueDate), inline: true },
@@ -226,4 +248,31 @@ export async function generateAlternativeQuest(
   });
 
   return newQuest.id;
+}
+
+export async function generateDailyQuests(notion, agent) {
+  const goalsData = await notion.databases.query({
+    database_id: process.env.NOTION_GOALS_DATABASE_ID,
+    filter: { property: "Status", select: { equals: "Active" } },
+  });
+
+  for (const goal of goalsData.results) {
+    const userId = goal.properties["Assigned To"].relation[0]?.id;
+    if (!userId) continue;
+
+    const questDescription = `Progress on: ${goal.properties.Name.title[0].plain_text}`;
+
+    // TODO: create a helper
+    await notion.pages.create({
+      parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
+      properties: {
+        Name: { title: [{ text: { content: questDescription } }] },
+        "Generated From Goal": { relation: [{ id: goal.id }] },
+        "Assigned To": { relation: [{ id: userId }] },
+        "Completion Status": { checkbox: false },
+        "XP Reward": { number: 50 }, // Default XP for completing
+        "Due Date": { date: { start: new Date().toISOString().split("T")[0] } },
+      },
+    });
+  }
 }

@@ -7,16 +7,14 @@ import {
   Client,
   GatewayIntentBits,
   Events,
-  Message,
   Collection,
-  Interaction,
   MessageFlags,
+  ChatInputCommandInteraction,
 } from "discord.js";
 import { ClientWithCommands } from "./utils/Client.ts";
 import { Client as NotionClient } from "@notionhq/client";
 import OpenAI from "openai";
 import cron from "node-cron";
-import { progressResponse } from "./modules/xp.ts";
 import { generateDailyQuests } from "./modules/quests.ts";
 import { generateChatResponse } from "./modules/aiResponses.ts";
 import { retrieveChatMemory, storeChatMemory } from "./modules/memory.ts";
@@ -109,51 +107,43 @@ discordClient.on("messageCreate", async (message) => {
 
   let lyricsResponse;
 
-  // TODO: Use a different way to parse the command, key/value store
-
-  if (validCommands.some((cmd) => lowerCaseMessage.startsWith(cmd))) {
-    let userMessage = message.content.trim();
-
-    if (userMessage.startsWith("!progress")) {
-      progressResponse(message);
-      await storeChatMemory(message, lyricsResponse, openai);
-    }
-    // if (userMessage.startsWith("!givequest")) {
-    //   generateIndividualQuest(notion, message);
-    //   await storeChatMemory(message, lyricsResponse, openai);
-    // }
-  } else if (lowerCaseMessage.includes(lyricName)) {
+  if (lowerCaseMessage.includes(lyricName)) {
     lyricsResponse = await lyricResponse(message, memories);
     await storeChatMemory(message, lyricsResponse, openai);
   }
 });
 
-discordClient.on(Events.InteractionCreate, async (interaction: Interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+discordClient.on(
+  Events.InteractionCreate,
+  async (interaction: ChatInputCommandInteraction) => {
+    if (!interaction.isChatInputCommand()) return;
 
-  const command = interaction.client.commands.get(interaction.commandName);
+    const command = interaction.client.commands.get(interaction.commandName);
 
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
-    return;
-  }
+    if (!command) {
+      console.error(
+        `No command matching ${interaction.commandName} was found.`
+      );
+      return;
+    }
 
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: "There was an error while executing this command!",
-        flags: MessageFlags.Ephemeral,
-      });
-    } else {
-      await interaction.reply({
-        content: "There was an error while executing this command!",
-        flags: MessageFlags.Ephemeral,
-      });
+    try {
+      await command.execute(interaction);
+    } catch (error) {
+      console.error(error);
+      if (interaction.replied || interaction.deferred) {
+        await interaction.followUp({
+          content: "There was an error while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.reply({
+          content: "There was an error while executing this command!",
+          flags: MessageFlags.Ephemeral,
+        });
+      }
     }
   }
-});
+);
 
 discordClient.login(process.env.DISCORD_BOT_TOKEN);
