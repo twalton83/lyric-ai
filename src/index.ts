@@ -14,7 +14,6 @@ import {
 import { ClientWithCommands } from "./utils/Client.ts";
 import { Client as NotionClient } from "@notionhq/client";
 import OpenAI from "openai";
-import cron from "node-cron";
 import { generateDailyQuests } from "./modules/quests.ts";
 import { generateChatResponse } from "./modules/aiResponses.ts";
 import { retrieveChatMemory, storeChatMemory } from "./modules/memory.ts";
