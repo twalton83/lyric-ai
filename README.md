@@ -1,3 +1,3 @@
 # lyric-ai
 
-An RPG influenced AI Discord chatbot that leverages ChatGPT and Relevance AI agents.
+An RPG influenced conversational AI Discord chatbot that leverages ChatGPT 4o mini and Pinecone as a memory database.
