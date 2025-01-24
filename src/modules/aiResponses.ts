@@ -11,8 +11,6 @@ export async function generateChatResponse(userId, message, memories) {
           .join("\n\n")
       : "No relevant past conversations.";
 
-  console.log(`Context:\n${memoryContext}\n\nUser: ${message}`);
-
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
