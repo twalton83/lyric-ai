@@ -9,7 +9,9 @@ import {
   ButtonStyle,
   Interaction,
   ChatInputCommandInteraction,
+  InteractionCallbackResponse,
 } from "discord.js";
+import { equal } from "assert";
 
 export async function generateDailyQuests(notion, agent) {
   const goalsData = await notion.databases.query({
@@ -42,18 +44,40 @@ export async function generateIndividualQuest(
   notion: any,
   interaction: ChatInputCommandInteraction
 ) {
+  // TODO: Accept a parameter so they can influence the quest
   const user = await getUserByDiscordID(interaction.user.id);
   if (!user) return;
 
   const userNotionPageId = user.id;
+
   const notionUserData = await notion.pages.retrieve({
     page_id: userNotionPageId,
   });
+
   if (!notionUserData) {
     return await interaction.reply(
       "❌ Unable to retrieve Notion user information."
     );
   }
+
+  const questData: any = await notion.databases.query({
+    database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID,
+    filter: {
+      and: [
+        { property: "Assigned To", relation: { contains: userNotionPageId } },
+        { property: "Completion Status", checkbox: { equals: false } },
+      ],
+    },
+  });
+
+  if (questData.results.length > 0) {
+    return await interaction.reply(
+      "You already have a quest in progress! Use /quest to see it."
+    );
+  }
+
+  await interaction.reply("Working on it, give me a second to think ✨");
+
   const notionUserId = notionUserData.created_by.id;
   const goalsData: any = await notion.databases.query({
     database_id: process.env.NOTION_GOALS_DATABASE_ID,
@@ -63,13 +87,16 @@ export async function generateIndividualQuest(
     return await interaction.reply("❌ No goals found for you in Notion.");
   }
 
-  await interaction.reply("Working on it");
-
   const randomGoal =
     goalsData.results[Math.floor(Math.random() * goalsData.results.length)];
+
   const userId = randomGoal.properties["Created By"].created_by.id;
   if (!userId) return;
-  const questDescription = await generateAIQuest(randomGoal.title);
+
+  const questDescription = await generateAIQuest(
+    randomGoal.properties["Title"].title[0].text.content
+  );
+
   const quest = {
     title: randomGoal.properties.title,
     description: questDescription,
@@ -77,32 +104,70 @@ export async function generateIndividualQuest(
     status: false,
     dueDate: new Date().toISOString().split("T")[0],
   };
+
   const page = await notion.pages.create({
     parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
     properties: {
       Title: { title: [{ text: { content: questDescription } }] },
       "Generated From Goal": { relation: [{ id: randomGoal.id }] },
-      "Assigned To": { relation: [{ id: user.id }] },
+      "Assigned To": { relation: [{ id: notionUserData.id }] },
       "Completion Status": { checkbox: quest.status },
       "XP Value": { number: quest.xp },
       "Due Date": { date: { start: quest.dueDate } },
     },
   });
+
   const confirm = new ButtonBuilder()
-    .setCustomId("reject")
-    .setLabel("Reject Quest")
-    .setStyle(ButtonStyle.Danger);
-  const cancel = new ButtonBuilder()
     .setCustomId("accept")
     .setLabel("Accept Quest")
     .setStyle(ButtonStyle.Success);
-  const row: any = new ActionRowBuilder().addComponents(cancel, confirm);
+  const cancel = new ButtonBuilder()
+    .setCustomId("reject")
+    .setLabel("reject Quest")
+    .setStyle(ButtonStyle.Danger);
+  const row: any = new ActionRowBuilder().addComponents(confirm, cancel);
 
-  await interaction.followUp({
+  const response: Message = await interaction.followUp({
     embeds: [generateQuestEmbed(quest, page.url)],
     components: [row],
+    withResponse: true,
   });
-  // if rejected, delete page
+
+  const collectorFilter = (i) => i.user.id === interaction.user.id;
+
+  try {
+    const confirmation = await response.awaitMessageComponent({
+      filter: collectorFilter,
+      time: 60_000,
+    });
+
+    if (confirmation.customId === "accept") {
+      await confirmation.update({
+        content: `Quest accepted!`,
+        components: [],
+      });
+    } else if (confirmation.customId === "reject") {
+      await confirmation.update({
+        content: "Quest rejected! Use /givequest if you want another quest.",
+        components: [],
+      });
+
+      await notion.pages.update({
+        page_id: page.id,
+        archived: true,
+      });
+    }
+  } catch {
+    await interaction.editReply({
+      content:
+        "Confirmation not received within 1 minute, quest has automatically been deleted.",
+      components: [],
+    });
+    await notion.pages.update({
+      page_id: page.id,
+      archived: true,
+    });
+  }
 }
 
 const generateQuestEmbed = (quest: any, url: string) => {
