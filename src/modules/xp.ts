@@ -10,7 +10,8 @@ const NOTION_USERS_DATABASE_ID = process.env.NOTION_USERS_DATABASE_ID;
 
 export async function addXP(
   xpAmount: number,
-  interaction: ChatInputCommandInteraction
+  interaction: ChatInputCommandInteraction,
+  questUrl: string
 ) {
   const user = await getUserByDiscordID(interaction.user.id);
   if (!user) return interaction.reply("❌ User not found in Notion database.");
@@ -25,7 +26,6 @@ export async function addXP(
   }
 
   const xpEntry = notionData.results[0];
-  console.log(xpEntry);
   const pageId = xpEntry.id;
   const currentXP = xpEntry.properties["Current XP"].number || 0;
 
@@ -35,12 +35,20 @@ export async function addXP(
     page_id: pageId,
     properties: {
       "Current XP": { number: newXP },
+      // "Next Rank XP"" {number: }
     },
   });
 
-  interaction.followUp(
-    `✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:** ${newXP} XP`
-  );
+  const completedQuestEmbed = new EmbedBuilder()
+    .setColor(0x0099ff)
+    .setTitle("Quest completed!")
+    .setDescription(`✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:**  XP`)
+    .setURL(questUrl)
+    .setTimestamp();
+
+  await interaction.followUp({
+    embeds: [completedQuestEmbed],
+  });
 }
 
 export async function progress(

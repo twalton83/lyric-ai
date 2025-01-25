@@ -43,7 +43,6 @@ const setCommands = async () => {
   const __dirname = path.dirname(__filename);
 
   const foldersPath = path.join(__dirname, "commands");
-  console.log(foldersPath, "foldersPath");
   const commandFolders = fs.readdirSync(foldersPath);
 
   for (const folder of commandFolders) {

@@ -100,7 +100,7 @@ export async function generateIndividualQuest(
 
   const response: Message = await interaction.followUp({
     embeds: [generateQuestEmbed(quest, page.url)],
-    components: [generateQuestButtons(true, true)],
+    components: [generateQuestButtons(true, false, true)],
     withResponse: true,
   });
 
@@ -190,7 +190,7 @@ export async function getCurrentQuest(
 
     const response: Message = await interaction.followUp({
       embeds: [generateQuestEmbed(parsedQuest, quest.url)],
-      components: [generateQuestButtons(false, false, true)],
+      components: [generateQuestButtons(false, true, true)],
       withResponse: true,
     });
 
@@ -246,21 +246,7 @@ export async function completeQuest(notion, quest, interaction) {
     properties: { "Completion Status": { checkbox: true } },
   });
 
-  addXP(xpAmount, interaction);
-
-  const parsedQuest = {
-    title: `✅ Quest completed! You earned ${xpAmount} XP.`,
-    description: quest.properties["Description"].rich_text[0].text.content,
-    xp: quest.properties["XP Value"].number,
-    status: quest.properties["Completion Status"].checkbox,
-    dueDate: quest.properties["Due Date"].date.start,
-  };
-
-  generateQuestEmbed(parsedQuest, quest.url);
-
-  await interaction.followUp({
-    embeds: [generateQuestEmbed(parsedQuest, quest.url)],
-  });
+  addXP(xpAmount, interaction, quest.url);
 }
 
 export async function generateAlternativeQuest(
@@ -319,8 +305,8 @@ export async function generateDailyQuests(notion, agent) {
 
 const generateQuestButtons = (
   hasAcceptButton: boolean,
-  hasRejectButton: boolean,
-  hasCompleteButton: boolean
+  hasCompleteButton: boolean,
+  hasRejectButton: boolean
 ) => {
   // TODO: can probably just pass in an object or something here, instead of if chain
   let row: any = new ActionRowBuilder();
