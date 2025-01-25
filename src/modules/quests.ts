@@ -9,6 +9,7 @@ import {
   ChatInputCommandInteraction,
 } from "discord.js";
 import { Client } from "@notionhq/client";
+import { addXP } from "./xp.ts";
 
 interface ParsedQuest {
   title: string;
@@ -23,7 +24,7 @@ export async function generateIndividualQuest(
   notion: any,
   interaction: ChatInputCommandInteraction
 ) {
-  // TODO: Accept a parameter so they can influence the quest
+  // TODO: Accept a parameter so they can influence the quest or use memory
   const user = await getUserByDiscordID(interaction.user.id);
   if (!user) return;
 
@@ -172,7 +173,7 @@ export async function getCurrentQuest(
   });
 
   if (questData.results.length === 0) {
-    return await interaction.reply(
+    return await interaction.followUp(
       "You don't have a quest yet! Use /givequest to get one!"
     );
   } else {
@@ -180,7 +181,6 @@ export async function getCurrentQuest(
     const quest = <any>questData.results[0];
 
     const parsedQuest = {
-      // TODO: Fix quest description in Notion for proper fetching and display
       title: "Current Quest",
       description: quest.properties["Description"].rich_text[0].text.content,
       xp: quest.properties["XP Value"].number,
@@ -190,7 +190,7 @@ export async function getCurrentQuest(
 
     const response: Message = await interaction.followUp({
       embeds: [generateQuestEmbed(parsedQuest, quest.url)],
-      components: [generateQuestButtons(false, true)],
+      components: [generateQuestButtons(false, false, true)],
       withResponse: true,
     });
 
@@ -212,6 +212,8 @@ export async function getCurrentQuest(
           page_id: quest.id,
           archived: true,
         });
+      } else if (confirmation.customId === "complete") {
+        completeQuest(notion, quest, interaction);
       }
     } catch {
       console.error("Something went wrong.");
@@ -230,25 +232,35 @@ const generateQuestEmbed = (quest: ParsedQuest, url: string) => {
       { name: "XP", value: String(quest.xp), inline: true }
     )
     .setTimestamp();
-  console.log("Embed generated!");
+  console.log("Quest Embed generated!");
   return embed;
 };
 
-export async function completeQuest(notion, questId, discordId) {
-  const user = await getUserByDiscordID(discordId);
+export async function completeQuest(notion, quest, interaction) {
+  const user = await getUserByDiscordID(interaction.user.id);
   if (!user) return;
-
-  const questData = await notion.pages.retrieve({ page_id: questId });
-  if (!questData) return;
-
-  const xpAmount = questData.properties["XP Reward"].number || 50;
+  const xpAmount = quest.properties["XP Value"].number || 50;
 
   await notion.pages.update({
-    page_id: questId,
+    page_id: quest.id,
     properties: { "Completion Status": { checkbox: true } },
   });
 
-  return `✅ Quest completed! You earned ${xpAmount} XP.`;
+  addXP(xpAmount, interaction);
+
+  const parsedQuest = {
+    title: `✅ Quest completed! You earned ${xpAmount} XP.`,
+    description: quest.properties["Description"].rich_text[0].text.content,
+    xp: quest.properties["XP Value"].number,
+    status: quest.properties["Completion Status"].checkbox,
+    dueDate: quest.properties["Due Date"].date.start,
+  };
+
+  generateQuestEmbed(parsedQuest, quest.url);
+
+  await interaction.followUp({
+    embeds: [generateQuestEmbed(parsedQuest, quest.url)],
+  });
 }
 
 export async function generateAlternativeQuest(
@@ -307,8 +319,10 @@ export async function generateDailyQuests(notion, agent) {
 
 const generateQuestButtons = (
   hasAcceptButton: boolean,
-  hasRejectButton: boolean
+  hasRejectButton: boolean,
+  hasCompleteButton: boolean
 ) => {
+  // TODO: can probably just pass in an object or something here, instead of if chain
   let row: any = new ActionRowBuilder();
   if (hasAcceptButton) {
     const confirm = new ButtonBuilder()
@@ -316,6 +330,14 @@ const generateQuestButtons = (
       .setLabel("Accept Quest")
       .setStyle(ButtonStyle.Success);
     row.addComponents(confirm);
+  }
+
+  if (hasCompleteButton) {
+    const complete = new ButtonBuilder()
+      .setCustomId("complete")
+      .setLabel("Complete Quest")
+      .setStyle(ButtonStyle.Success);
+    row.addComponents(complete);
   }
 
   if (hasRejectButton) {
