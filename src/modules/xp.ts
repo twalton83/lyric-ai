@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, EmbedBuilder, Message } from "discord.js";
+import { ChatInputCommandInteraction, EmbedBuilder } from "discord.js";
 import { getUserByDiscordID, notion } from "./notion.ts";
 import { Client } from "@notionhq/client";
 
@@ -35,14 +35,25 @@ export async function addXP(
     page_id: pageId,
     properties: {
       "Current XP": { number: newXP },
-      // "Next Rank XP"" {number: }
     },
   });
 
+  const rankInfo = await checkRankProgression(user);
+
   const completedQuestEmbed = new EmbedBuilder()
     .setColor(0x0099ff)
-    .setTitle("Quest completed!")
-    .setDescription(`✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:**  XP`)
+    .setTitle(`Quest completed! ${rankInfo.rankedUp ? "You ranked up!" : ""}`)
+    .setDescription(
+      `✨ **XP Gained:** ${xpAmount} XP\n🏆 **Total XP:** ${newXP}`
+    )
+    .addFields(
+      {
+        name: "**XP Until Next Rank:**",
+        value: String(rankInfo.nextRankXP - newXP),
+        inline: true,
+      },
+      { name: "Current Rank", value: rankInfo.newRank, inline: true }
+    )
     .setURL(questUrl)
     .setTimestamp();
 
@@ -68,7 +79,7 @@ export async function progress(
   const notionXPData = await notion.databases.query({
     database_id: process.env.NOTION_XP_DATABASE_ID,
     filter: {
-      property: "Related User",
+      property: "User",
       relation: { contains: userNotionPageId },
     },
   });
@@ -85,7 +96,7 @@ export async function progress(
         "Next Rank XP": { number: 500 },
         Rank: { select: { name: "E-Rank" } },
         "Total Quests Completed": { number: 0 },
-        "Related User": { relation: [{ id: userNotionPageId }] },
+        User: { relation: [{ id: userNotionPageId }] },
       },
     });
   }
@@ -108,4 +119,62 @@ export async function progress(
     .setTimestamp();
 
   interaction.reply({ embeds: [embed] });
+}
+
+export async function checkRankProgression(user) {
+  if (!user) return { rankedUp: false, newRank: null, nextRankXP: null };
+
+  const notionData: any = await notion.databases.query({
+    database_id: NOTION_XP_DATABASE_ID,
+    filter: { property: "User", relation: { contains: user.id } },
+  });
+
+  if (notionData.results.length === 0) {
+    return { rankedUp: false, newRank: null, nextRankXP: null };
+  }
+
+  const xpEntry = notionData.results[0];
+  const pageId = xpEntry.id;
+  const currentXP = xpEntry.properties["Current XP"].number || 0;
+  let currentRank = xpEntry.properties["Rank"].select.name;
+  let nextRankXP = xpEntry.properties["Next Rank XP"].number;
+
+  // TODO: Move to a config.json
+  const ranks = [
+    { name: "E-Rank", xp: 0 },
+    { name: "D-Rank", xp: 500 },
+    { name: "C-Rank", xp: 1200 },
+    { name: "B-Rank", xp: 3000 },
+    { name: "A-Rank", xp: 6500 },
+    { name: "S-Rank", xp: 12000 },
+  ];
+
+  let newRank = currentRank;
+  let newNextRankXP = nextRankXP;
+  let rankedUp = false;
+
+  let currentRankIndex = ranks.findIndex((rank) => rank.name === currentRank);
+
+  for (let i = currentRankIndex + 1; i < ranks.length; i++) {
+    console.log(currentXP, ranks[i].xp);
+    if (currentXP >= ranks[i].xp) {
+      newRank = ranks[i].name;
+      newNextRankXP = ranks[i + 1] ? ranks[i + 1].xp : null;
+      rankedUp = true;
+    } else {
+      break;
+    }
+  }
+
+  if (rankedUp) {
+    await notion.pages.update({
+      page_id: pageId,
+      properties: {
+        Rank: { select: { name: newRank } },
+        "Next Rank XP": { number: newNextRankXP },
+      },
+    });
+  }
+
+  return { rankedUp, newRank, nextRankXP: newNextRankXP };
 }
