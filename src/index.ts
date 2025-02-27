@@ -18,6 +18,7 @@ import { generateDailyQuests } from "./modules/quests.ts";
 import { generateChatResponse } from "./modules/aiResponses.ts";
 import { retrieveChatMemory, storeChatMemory } from "./modules/memory.ts";
 import "source-map-support/register";
+import { handleFocusSelection } from "./modules/focus.ts";
 
 const NOTION_XP_DATABASE_ID = process.env.NOTION_XP_DATABASE_ID;
 const NOTION_DAILY_QUESTS_DATABASE_ID =
@@ -143,5 +144,14 @@ discordClient.on(
     }
   }
 );
+
+discordClient.on(Events.InteractionCreate, async (interaction) => {
+  if (
+    interaction.isStringSelectMenu() &&
+    interaction.customId === "set_focus"
+  ) {
+    await handleFocusSelection(interaction);
+  }
+});
 
 discordClient.login(process.env.DISCORD_BOT_TOKEN);

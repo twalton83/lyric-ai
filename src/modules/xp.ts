@@ -156,7 +156,6 @@ export async function checkRankProgression(user) {
   let currentRankIndex = ranks.findIndex((rank) => rank.name === currentRank);
 
   for (let i = currentRankIndex + 1; i < ranks.length; i++) {
-    console.log(currentXP, ranks[i].xp);
     if (currentXP >= ranks[i].xp) {
       newRank = ranks[i].name;
       newNextRankXP = ranks[i + 1] ? ranks[i + 1].xp : null;

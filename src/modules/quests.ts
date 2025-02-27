@@ -24,20 +24,44 @@ export async function generateIndividualQuest(
   notion: any,
   interaction: ChatInputCommandInteraction
 ) {
-  // TODO: Accept a parameter so they can influence the quest or use memory
   const user = await getUserByDiscordID(interaction.user.id);
-  if (!user) return;
+  if (!user)
+    return interaction.reply({
+      content: "❌ User not found in Notion database.",
+      ephemeral: true,
+    });
 
   const userNotionPageId = user.id;
 
   const notionUserData = await notion.pages.retrieve({
     page_id: userNotionPageId,
   });
-
   if (!notionUserData) {
-    return await interaction.reply(
-      "❌ Unable to retrieve Notion user information."
-    );
+    return interaction.reply({
+      content: "❌ Unable to retrieve Notion user information.",
+      ephemeral: true,
+    });
+  }
+
+  const userFocusCategory = notionUserData.properties.Focus.select?.name; // ✅ Fetches dropdown value
+
+  if (!userFocusCategory) {
+    return interaction.reply({
+      content: "❌ You have not set a focus! Use `/setfocus` to choose one.",
+      ephemeral: true,
+    });
+  }
+
+  const goalsData: any = await notion.databases.query({
+    database_id: process.env.NOTION_GOALS_DATABASE_ID,
+    filter: { property: "Category", select: { equals: userFocusCategory } },
+  });
+
+  if (goalsData.results.length === 0) {
+    return interaction.reply({
+      content: "❌ No goals found for your selected focus.",
+      ephemeral: true,
+    });
   }
 
   const questData: any = await notion.databases.query({
@@ -51,34 +75,24 @@ export async function generateIndividualQuest(
   });
 
   if (questData.results.length > 0) {
-    return await interaction.reply(
-      "You already have a quest in progress! Use /quest to see it."
-    );
+    return interaction.reply({
+      content:
+        "❌ You already have a quest in progress! Use `/quest` to see it.",
+      ephemeral: true,
+    });
   }
 
-  await interaction.reply("Working on it, give me a second to think ✨");
-
-  const notionUserId = notionUserData.created_by.id;
-  const goalsData: any = await notion.databases.query({
-    database_id: process.env.NOTION_GOALS_DATABASE_ID,
-    filter: { property: "Created By", created_by: { contains: notionUserId } },
-  });
-  if (goalsData.results.length === 0) {
-    return await interaction.reply("❌ No goals found for you in Notion.");
-  }
+  await interaction.reply("✨ Working on it, give me a second to think...");
 
   const randomGoal =
     goalsData.results[Math.floor(Math.random() * goalsData.results.length)];
+  const goalTitle =
+    randomGoal.properties["Title"].title[0]?.text.content || "Unnamed Goal";
 
-  const userId = randomGoal.properties["Created By"].created_by.id;
-  if (!userId) return;
-
-  const questDescription = await generateAIQuest(
-    randomGoal.properties["Title"].title[0].text.content
-  );
+  const questDescription = await generateAIQuest(goalTitle);
 
   const quest: ParsedQuest = {
-    title: randomGoal.properties["Title"].title[0].text.content,
+    title: goalTitle,
     description: questDescription,
     xp: 50,
     status: false,
@@ -89,9 +103,9 @@ export async function generateIndividualQuest(
     parent: { database_id: process.env.NOTION_DAILY_QUESTS_DATABASE_ID },
     properties: {
       Title: { title: [{ text: { content: quest.title } }] },
-      Description: { rich_text: [{ text: { content: questDescription } }] },
+      Description: { rich_text: [{ text: { content: quest.description } }] },
       "Generated From Goal": { relation: [{ id: randomGoal.id }] },
-      "Assigned To": { relation: [{ id: notionUserData.id }] },
+      "Assigned To": { relation: [{ id: userNotionPageId }] },
       "Completion Status": { checkbox: quest.status },
       "XP Value": { number: quest.xp },
       "Due Date": { date: { start: quest.dueDate } },
@@ -114,12 +128,13 @@ export async function generateIndividualQuest(
 
     if (confirmation.customId === "accept") {
       await confirmation.update({
-        content: `Quest accepted!`,
+        content: `✅ Quest accepted!`,
         components: [],
       });
     } else if (confirmation.customId === "reject") {
       await confirmation.update({
-        content: "Quest rejected! Use /givequest if you want another quest.",
+        content:
+          "❌ Quest rejected! Use `/givequest` if you want another quest.",
         components: [],
       });
 
@@ -131,9 +146,10 @@ export async function generateIndividualQuest(
   } catch {
     await interaction.editReply({
       content:
-        "Confirmation not received within 1 minute, quest has automatically been deleted.",
+        "⚠️ Confirmation not received within 1 minute, quest has automatically been deleted.",
       components: [],
     });
+
     await notion.pages.update({
       page_id: page.id,
       archived: true,
